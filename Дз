@@ -1,111 +1,68 @@
-﻿#include <iostream>
+#include <iostream>
 #include <cmath>
-#include <iomanip>
-#include <functional> // Для std::function
-#include <tuple>     // Для std::tuple
-#include <limits>    // Для numeric_limits
+
 using namespace std;
 
 // Функция для метода половинного деления
-tuple<double, int> bisectionMethod(function<double(double)> f, double a, double b, double tolerance, int maxIterations) {
+// f - функция, для которой ищем корень
+// a, b - начальный интервал, на котором ищем корень
+// epsilon - требуемая точность
+double bisection(double a, double b, double (*f)(double), double epsilon) {
     if (f(a) * f(b) >= 0) {
-        cerr << "Ошибка: Функция не меняет знак на интервале." << endl;
-        return { numeric_limits<double>::quiet_NaN(), -1 }; // Возвращаем NaN и код ошибки
+        return NAN; // Возвращаем NAN, если нет корня на интервале
     }
 
-    int iterations = 0;
     double c;
-    while ((b - a) / 2.0 > tolerance && iterations < maxIterations) {
+    while (abs(b - a) >= epsilon) {
         c = (a + b) / 2.0;
         if (f(c) == 0) {
-            break;
-        }
-        else if (f(a) * f(c) < 0) {
+            return c; // Найден точный корень
+        } else if (f(a) * f(c) < 0) {
             b = c;
-        }
-        else {
+        } else {
             a = c;
         }
-        iterations++;
     }
-    return { c, iterations }; // Возвращаем найденный корень и количество итераций
+    return (a + b) / 2.0; // Возвращаем середину последнего интервала как приближенный корень
 }
 
 
 // Функция для метода простых итераций
-tuple<double, int> simpleIterationMethod(function<double(double)> g, double initialGuess, double tolerance, int maxIterations) {
-    double x0 = initialGuess;
-    double x1;
-    int iterations = 0;
+// g - функция, к которой преобразовано уравнение x = g(x)
+// x0 - начальное приближение
+// epsilon - требуемая точность
+// maxIterations - максимальное количество итераций
+double simpleIteration(double x0, double (*g)(double), double epsilon, int maxIterations) {
+    double x_prev = x0;
+    double x_curr;
 
-    while (iterations < maxIterations) {
-        x1 = g(x0);
-        if (abs(x1 - x0) < tolerance) {
-            break;
+    for (int i = 0; i < maxIterations; ++i) {
+        x_curr = g(x_prev);
+        if (abs(x_curr - x_prev) < epsilon) {
+            return x_curr; // Достигнута требуемая точность
         }
-        x0 = x1;
-        iterations++;
+        x_prev = x_curr;
     }
-    if (iterations == maxIterations)
-    {
-        cerr << "Метод простых итераций не сошелся за " << maxIterations << " итераций." << endl;
-    }
-    return { x1, iterations }; // Возвращаем найденный корень и количество итераций
+
+    return NAN; // Не удалось достичь требуемой точности за maxIterations итераций
 }
+
 
 // Функция для решения уравнения 2^-x = sin(x)
-void solveEquationB() {
-    // Функция для метода половинного деления
-    auto f = [](double x) { return pow(2, -x) - sin(x); };
-
-    // Функция для метода простых итераций нам нужно преобразовать уравнение к виду x=g(x)
-    // 2^-x = sin(x)  => -x = log2(sin(x)) => x = -log2(sin(x))
-    auto g = [](double x) { return -log2(sin(x)); };
-
-
-    double a = 0.0;
-    double b = 2.0; // Интервал в котором находится корень (можно уточнить)
-    double toleranceBisection = 1e-5;
-    double initialGuessSimple = 0.5;
-    double toleranceSimple = 1e-6;
-    int maxIterations = 1000;
-
-    cout << "Решение уравнения 2^-x = sin(x):" << endl;
-    // Метод половинного деления
-    auto [rootBisection, iterationsBisection] = bisectionMethod(f, a, b, toleranceBisection, maxIterations);
-
-    if (!isnan(rootBisection)) {
-        if (rootBisection < 10) {
-            cout << "Метод половинного деления:" << endl;
-            cout << "Корень: " << fixed << setprecision(10) << rootBisection << endl;
-            cout << "Количество итераций: " << iterationsBisection << endl;
-        }
-        else {
-            cout << "Корень методом половинного деления не подходит условию x<10" << endl;
-        }
-    }
-
-
-    // Метод простых итераций
-    auto [rootSimple, iterationsSimple] = simpleIterationMethod(g, initialGuessSimple, toleranceSimple, maxIterations);
-    if (!isnan(rootSimple)) {
-        if (rootSimple < 10) {
-            cout << "\nМетод простых итераций:" << endl;
-            cout << "Корень: " << fixed << setprecision(10) << rootSimple << endl;
-            cout << "Количество итераций: " << iterationsSimple << endl;
-        }
-        else {
-            cout << "Корень методом простых итераций не подходит условию x<10" << endl;
-        }
-    }
-
-
+double equation(double x) {
+    return pow(2, -x) - sin(x);
 }
 
 
+// Функция для метода простых итераций, уравнение преобразовано к виду x=g(x)
+// В данном случае x = -log2(sin(x))  или  x = asin(2^-x) -  важно чтобы g(x) сходилась
 
-int main() {
-    setlocale(LC_ALL, "ru");
-    solveEquationB();
-    return 0;
+//Пример 1: x = -log2(sin(x))  (нужна коррекция, sin(x) должен быть положительным)
+double g_iteration1(double x) {
+     return -log2(sin(x)); // Некорректно, так как log2() не определен для отрицательных значений и 0
+}
+
+//Альтернативный пример, который лучше работает:  x = asin(2^-x)
+double g_iteration2(double x) {
+    return asin(pow(2, -x));
 }
